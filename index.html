@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            width: 480px;
+            height: 480px;
+            border: 2px solid #000;
+        }
+        .square {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+        }
+        .light {
+            background-color: #f0d9b5;
+        }
+        .dark {
+            background-color: #b58863;
+        }
+        .piece {
+            cursor: pointer;
+        }
+        .highlight {
+            background-color: rgba(0, 255, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="chessboard"></div>
+    <script>
+        const chessboard = document.getElementById('chessboard');
+        const pieces = {
+            'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '♚', 'P': '♟',
+            'r': '♖', 'n': '♘', 'b': '♗', 'q': '♕', 'k': '♔', 'p': '♙'
+        };
+
+        let board = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+
+        let selectedSquare = null;
+        let currentPlayer = 'white';
+
+        function createBoard() {
+            chessboard.innerHTML = '';
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+
+                    const piece = board[row][col];
+                    if (piece) {
+                        const pieceElement = document.createElement('div');
+                        pieceElement.className = 'piece';
+                        pieceElement.textContent = pieces[piece];
+                        pieceElement.dataset.piece = piece;
+                        square.appendChild(pieceElement);
+                    }
+
+                    square.addEventListener('click', () => handleClick(square));
+                    chessboard.appendChild(square);
+                }
+            }
+        }
+
+        function handleClick(square) {
+            const row = parseInt(square.dataset.row);
+            const col = parseInt(square.dataset.col);
+            const piece = board[row][col];
+
+            // If no piece is selected
+            if (!selectedSquare) {
+                // Can only select your own pieces
+                if (piece && getPieceColor(piece) === currentPlayer) {
+                    selectedSquare = square;
+                    highlightMoves(row, col);
+                }
+            } 
+            // If piece is selected
+            else {
+                const fromRow = parseInt(selectedSquare.dataset.row);
+                const fromCol = parseInt(selectedSquare.dataset.col);
+                
+                // If clicking on same piece, deselect
+                if (fromRow === row && fromCol === col) {
+                    clearHighlights();
+                    selectedSquare = null;
+                    return;
+                }
+
+                // If valid move, make the move
+                if (isValidMove(fromRow, fromCol, row, col)) {
+                    makeMove(fromRow, fromCol, row, col);
+                    clearHighlights();
+                    selectedSquare = null;
+                    currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+                }
+            }
+        }
+
+        function isValidMove(fromRow, fromCol, toRow, toCol) {
+            const piece = board[fromRow][fromCol];
+            const target = board[toRow][toCol];
+            
+            // Can't capture your own piece
+            if (target && getPieceColor(target) === getPieceColor(piece)) {
+                return false;
+            }
+
+            const dx = Math.abs(toRow - fromRow);
+            const dy = Math.abs(toCol - fromCol);
+
+            switch (piece.toLowerCase()) {
+                case 'p': // Pawn
+                    const direction = piece === 'P' ? -1 : 1;
+                    // Forward move
+                    if (fromCol === toCol) {
+                        // Single move
+                        if (toRow === fromRow + direction && !target) return true;
+                        // Double move from starting position
+                        if ((fromRow === 1 && piece === 'p' && toRow === 3 && !board[2][fromCol] && !target) ||
+                            (fromRow === 6 && piece === 'P' && toRow === 4 && !board[5][fromCol] && !target)) {
+                            return true;
+                        }
+                    }
+                    // Capture
+                    else if (dy === 1 && toRow === fromRow + direction && target) {
+                        return true;
+                    }
+                    break;
+
+                case 'r': // Rook
+                    if ((fromRow === toRow || fromCol === toCol) && isPathClear(fromRow, fromCol, toRow, toCol)) {
+                        return true;
+                    }
+                    break;
+
+                case 'n': // Knight
+                    return (dx === 2 && dy === 1) || (dx === 1 && dy === 2);
+
+                case 'b': // Bishop
+                    if (dx === dy && isPathClear(fromRow, fromCol, toRow, toCol)) {
+                        return true;
+                    }
+                    break;
+
+                case 'q': // Queen
+                    if ((fromRow === toRow || fromCol === toCol || dx === dy) && 
+                        isPathClear(fromRow, fromCol, toRow, toCol)) {
+                        return true;
+                    }
+                    break;
+
+                case 'k': // King
+                    return dx <= 1 && dy <= 1;
+            }
+            return false;
+        }
+
+        function isPathClear(fromRow, fromCol, toRow, toCol) {
+            const rowStep = toRow > fromRow ? 1 : toRow < fromRow ? -1 : 0;
+            const colStep = toCol > fromCol ? 1 : toCol < fromCol ? -1 : 0;
+            
+            let row = fromRow + rowStep;
+            let col = fromCol + colStep;
+            
+            while (row !== toRow || col !== toCol) {
+                if (board[row][col]) return false;
+                row += rowStep;
+                col += colStep;
+            }
+            return true;
+        }
+
+        function highlightMoves(row, col) {
+            clearHighlights();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (isValidMove(row, col, r, c)) {
+                        const square = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                        square.classList.add('highlight');
+                    }
+                }
+            }
+        }
+
+        function makeMove(fromRow, fromCol, toRow, toCol) {
+            board[toRow][toCol] = board[fromRow][fromCol];
+            board[fromRow][fromCol] = '';
+            createBoard(); // Refresh the board
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.highlight').forEach(sq => sq.classList.remove('highlight'));
+        }
+
+        function getPieceColor(piece) {
+            return piece === piece.toUpperCase() ? 'white' : 'black';
+        }
+
+        createBoard();
+    </script>
+</body>
+</html>
